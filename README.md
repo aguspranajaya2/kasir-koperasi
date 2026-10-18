@@ -28,16 +28,48 @@ Monorepo MERN dengan TypeScript untuk aplikasi kasir koperasi. `apps/api` berisi
 └── .env.example
 ```
 
+## Menjalankan seluruh aplikasi dengan Docker
+
+Docker Compose menjalankan MongoDB, API Express, dan web React dalam container. Salin `.env.example` menjadi `.env` di folder root, isi `JWT_SECRET` dengan secret acak minimal 32 karakter, lalu jalankan:
+
+```powershell
+docker compose up --build -d
+docker compose ps
+```
+
+Buka `http://localhost:8080`. Nginx menyajikan React dan meneruskan `/api/*` ke API di jaringan internal Docker. API tidak membuka port ke host; MongoDB hanya terikat ke loopback host untuk akses lokal. Compose memakai volume bernama `mongo_data`, sehingga data tetap ada setelah container dihentikan dengan `docker compose down` (jangan memakai `-v` bila ingin menyimpan data).
+
+Untuk membuat administrator awal, isi `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_EMAIL`, dan `INITIAL_ADMIN_PASSWORD` di `.env`, lalu jalankan:
+
+```powershell
+docker compose run --rm api node dist/scripts/create-admin.js
+```
+
+Hapus nilai bootstrap dari `.env` setelah akun dibuat. Periksa status dan log dengan `docker compose ps` dan `docker compose logs -f api web`.
+
+Untuk menghentikan aplikasi: `docker compose down`. Jangan menjalankan `mongod.exe` lokal bersamaan karena keduanya memakai port `27017`. Compose menyesuaikan alamat replica set agar API di container dapat menemukan MongoDB di `mongodb:27017`; volume database tetap dipakai.
+
+### Menjalankan web/API dari host (opsional)
+
+Jika beralih dari stack Docker penuh, hentikan container terlebih dahulu dengan `docker compose down` (volume database tetap tersimpan). Untuk memakai Vite dan API mode watch di Windows, jalankan MongoDB dengan konfigurasi replica set untuk host, lalu start `pnpm dev`:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d mongodb mongo-init
+pnpm dev
+```
+
+Di mode ini web tersedia di `http://localhost:5173`. Sebelum berganti antara mode host dan stack Docker penuh, hentikan proses `pnpm dev` dengan `Ctrl+C`. Skrip init akan menyesuaikan alamat replica set MongoDB; data di volume tidak dihapus.
+
 ## Menjalankan lokal
 
 1. Pasang Node.js 20.18+ dan pnpm 9.15.4. Jika pnpm belum tersedia, aktifkan lewat Corepack: `corepack enable`.
 2. Salin `.env.example` menjadi `.env` di folder root. Isi `JWT_SECRET` dengan nilai acak minimal 32 karakter. Atur `WEB_ORIGIN`, `MONGODB_URI`, `SALES_TAX_RATE_BPS` (basis point; `1100` berarti 11%), dan zona waktu operasional.
 3. Pasang dependency: `pnpm install`.
-4. Jalankan MongoDB replica set lokal: `docker compose up -d`. Replica set diperlukan karena checkout, perubahan saldo, stok, dan audit log memakai transaksi MongoDB.
+4. Jalankan MongoDB replica set untuk API di host: `docker compose -f docker-compose.yml -f docker-compose.host.yml up -d mongodb mongo-init`. Replica set diperlukan karena checkout, perubahan saldo, stok, dan audit log memakai transaksi MongoDB.
 5. Untuk akun administrator pertama, isi sementara `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_EMAIL`, dan `INITIAL_ADMIN_PASSWORD` pada `.env` (minimal 12 karakter), lalu jalankan `pnpm --filter @koperasi/api seed:admin`. Hapus nilai password bootstrap setelah akun terbentuk. Skrip menolak membuat ulang email yang sudah terdaftar.
 6. Jalankan API dan web: `pnpm dev`. Web tersedia di `http://localhost:5173`, API di `http://localhost:4000/api/v1`.
 
-Endpoint API memakai awalan `/api/v1`. Konfigurasi replica set Compose ini untuk API yang berjalan di host lokal (bukan di container). Pada produksi, gunakan replica set terkelola dan sajikan web/API melalui satu site/origin agar cookie `SameSite=Strict` berfungsi tanpa mengubah kebijakan menjadi lintas-site.
+Endpoint API memakai awalan `/api/v1`. Konfigurasi replica set host mengiklankan `127.0.0.1:27017`; mode Docker penuh mengiklankan hostname internal `mongodb:27017`. Pada produksi, gunakan replica set terkelola dengan autentikasi/TLS dan sajikan web/API melalui satu site/origin agar cookie `SameSite=Strict` berfungsi tanpa mengubah kebijakan menjadi lintas-site.
 
 ## Alur implementasi
 

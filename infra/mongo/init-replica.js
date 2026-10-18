@@ -1,8 +1,26 @@
+const desiredHost = "127.0.0.1:27017";
+let config = null;
+
 try {
-  rs.status();
-  print("Replica set rs0 already initialized");
+  config = rs.conf();
 } catch {
-  // The API runs on the host during local development, so advertise the published host port.
-  rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "127.0.0.1:27017" }] });
-  print("Replica set rs0 initialized");
+  // A new volume has not had its single-node replica set initialized yet.
+}
+
+if (!config) {
+  rs.initiate({ _id: "rs0", members: [{ _id: 0, host: desiredHost }] });
+  print(`Replica set rs0 initialized with ${desiredHost}`);
+} else {
+  if (config._id !== "rs0" || config.members.length !== 1 || config.members[0]._id !== 0) {
+    throw new Error("Expected the local single-member replica set named rs0");
+  }
+
+  if (config.members[0].host !== desiredHost) {
+    config.members[0].host = desiredHost;
+    config.version += 1;
+    rs.reconfig(config, { force: true });
+    print(`Replica set rs0 address changed to ${desiredHost}`);
+  } else {
+    print(`Replica set rs0 already uses ${desiredHost}`);
+  }
 }

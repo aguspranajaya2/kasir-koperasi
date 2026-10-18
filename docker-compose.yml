@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - "27017:27017"
+      - "127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -18,8 +18,51 @@ services:
       mongodb:
         condition: service_healthy
     volumes:
-      - ./infra/mongo/init-replica.js:/scripts/init-replica.js:ro
-    entrypoint: ["mongosh", "mongodb://mongodb:27017/admin", "/scripts/init-replica.js"]
+      - ./infra/mongo/init-replica-docker.js:/scripts/init-replica.js:ro
+    entrypoint: ["mongosh", "mongodb://mongodb:27017/admin?directConnection=true", "/scripts/init-replica.js"]
     restart: "no"
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      API_PORT: "4000"
+      TRUST_PROXY_HOPS: "1"
+      WEB_ORIGIN: ${DOCKER_WEB_ORIGIN:-http://localhost:8080}
+      MONGODB_URI: mongodb://mongodb:27017/koperasi?replicaSet=rs0
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/readyz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    stop_grace_period: 15s
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 volumes:
   mongo_data:

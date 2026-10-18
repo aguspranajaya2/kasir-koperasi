@@ -1,0 +1,6 @@
+# Use this override when running the API/web with `pnpm dev` on Windows.
+# The full `docker compose up` stack advertises MongoDB as mongodb:27017 instead.
+services:
+  mongo-init:
+    volumes:
+      - ./infra/mongo/init-replica.js:/scripts/init-replica.js:ro
