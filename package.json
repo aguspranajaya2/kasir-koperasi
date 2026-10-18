@@ -1,0 +1,12 @@
+{
+  "name": "koperasi-kasir",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.4",
+  "engines": { "node": ">=20.18" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @koperasi/api --filter @koperasi/web dev",
+    "build": "pnpm --recursive build",
+    "typecheck": "pnpm --recursive typecheck"
+  }
+}
